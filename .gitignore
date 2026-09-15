@@ -1,0 +1,11 @@
+# ─── Virtual environments ──────────
+.venv/
+
+# ─── Environment / secrets ─────────
+.env
+
+
+# ─── Data (Bronze / Silver / Gold) ─
+data/bronze/*
+data/silver/*
+data/gold/*
