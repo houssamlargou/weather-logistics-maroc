@@ -13,6 +13,8 @@ __pycache__/
 data/bronze/weather/
 data/silver/*.parquet
 data/gold/*.parquet
+data/silver/*.csv
+data/gold/*.csv
 
 # Logs
 logs/
