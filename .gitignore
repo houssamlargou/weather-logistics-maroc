@@ -1,11 +1,28 @@
-# ─── Virtual environments ──────────
+# Virtual environment
 .venv/
+venv/
+env/
 
-# ─── Environment / secrets ─────────
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Data (large / generated)
+data/bronze/weather/
+data/silver/*.parquet
+data/gold/*.parquet
+
+# Logs
+logs/
+*.log
+
+# Environment
 .env
 
-
-# ─── Data (Bronze / Silver / Gold) ─
-data/bronze/*
-data/silver/*
-data/gold/*
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
