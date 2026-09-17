@@ -12,4 +12,4 @@ if __name__ == "__main__":
     df = load_cities_raw()
     print(f"Raw cities: {len(df)} rows, {len(df.columns)} columns")
     print("Columns:", df.columns.tolist())
-    print(df.head())
+    print(df.head()) 
