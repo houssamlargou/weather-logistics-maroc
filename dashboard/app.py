@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pydeck as pdk
 
 import pandas as pd
 import streamlit as st
@@ -8,7 +9,6 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
 
-# ---------- Config ----------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -19,7 +19,6 @@ st.set_page_config(
 )
 
 
-# ---------- Database ----------
 @st.cache_resource
 def get_engine():
     user = os.getenv("POSTGRES_USER", "weather")
@@ -63,32 +62,25 @@ def load_data() -> pd.DataFrame:
     return pd.read_sql(query, get_engine())
 
 
-# ---------- Load ----------
 df = load_data()
 
 
-# ---------- Header ----------
 st.title("🌦️ Weather Logistics Maroc")
 st.caption("Prévisions météo et niveaux de risque pour les villes marocaines")
 
 
-# ---------- Sidebar filters ----------
 st.sidebar.header("Filtres")
 
-# City filter
 cities = ["Toutes"] + sorted(df["city"].unique().tolist())
 selected_city = st.sidebar.selectbox("Ville", cities)
 
-# Date filter
 dates = sorted(df["forecast_date"].unique())
 date_options = ["Toutes"] + [str(d) for d in dates]
 selected_date = st.sidebar.selectbox("Date", date_options)
 
-# Risk level filter
 levels = ["Tous", "Low", "Moderate", "High", "Extreme"]
 selected_level = st.sidebar.selectbox("Niveau de risque", levels)
 
-# Period filter (days ahead)
 st.sidebar.subheader("Période")
 min_date = df["forecast_date"].min()
 max_date = df["forecast_date"].max()
@@ -100,7 +92,6 @@ date_range = st.sidebar.date_input(
 )
 
 
-# ---------- Apply filters ----------
 filtered = df.copy()
 
 if selected_city != "Toutes":
@@ -120,7 +111,6 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
     ]
 
 
-# ---------- KPI row ----------
 st.subheader("Indicateurs clés")
 
 col1, col2, col3, col4, col5 = st.columns(5)
@@ -148,7 +138,6 @@ with col5:
         st.metric("Ville la plus risquée", "—")
 
 
-# ---------- Chart 1: risk by city ----------
 st.subheader("Risque moyen par ville")
 
 if len(filtered) > 0:
@@ -168,12 +157,11 @@ if len(filtered) > 0:
         labels={"risk_score": "Risque moyen", "city": "Ville"},
     )
     fig.update_layout(yaxis=dict(autorange="reversed"), height=500)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 else:
     st.info("Aucune donnée pour ces filtres.")
 
 
-# ---------- Chart 2: risk by date ----------
 st.subheader("Risque moyen par jour")
 
 if len(filtered) > 0:
@@ -187,33 +175,61 @@ if len(filtered) > 0:
         markers=True,
         labels={"forecast_date": "Date", "risk_score": "Risque moyen"},
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
-
-# ---------- Chart 3: map of cities ----------
 st.subheader("Carte des villes (risque moyen)")
+
 
 if len(filtered) > 0:
     map_data = (
         filtered.groupby(["city", "latitude", "longitude"], as_index=False)["risk_score"]
         .mean()
     )
-    fig3 = px.scatter_mapbox(
-        map_data,
-        lat="latitude",
-        lon="longitude",
-        size="risk_score",
-        color="risk_score",
-        hover_name="city",
-        color_continuous_scale=["#2ecc71", "#f1c40f", "#e67e22", "#e74c3c"],
-        zoom=4,
-        height=500,
+
+    def risk_to_color(score):
+        if score < 25:
+            return [46, 204, 113, 180]    
+        elif score < 50:
+            return [241, 196, 15, 180]   
+        elif score < 75:
+            return [230, 126, 34, 180] 
+        else:
+            return [231, 76, 60, 180]
+
+    map_data["color"] = map_data["risk_score"].apply(risk_to_color)
+
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=map_data,
+        get_position=["longitude", "latitude"],
+        get_radius="risk_score * 300",  
+        get_fill_color="color",
+        pickable=True,
+        opacity=0.8,
+        stroked=True,
+        get_line_color=[0, 0, 0],
+        line_width_min_pixels=1,
     )
-    fig3.update_layout(mapbox_style="open-street-map")
-    st.plotly_chart(fig3, use_container_width=True)
+
+    view_state = pdk.ViewState(
+        latitude=map_data["latitude"].mean(),
+        longitude=map_data["longitude"].mean(),
+        zoom=4.5,
+        pitch=0,
+    )
+
+    deck = pdk.Deck(
+        layers=[layer],
+        initial_view_state=view_state,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+        tooltip={"text": "{city}\nRisque moyen: {risk_score}"},
+    )
+
+    st.pydeck_chart(deck, width="stretch")
+else:
+    st.info("Aucune donnée pour ces filtres.")
 
 
-# ---------- Table: top riskiest pairs ----------
 st.subheader("Top 20 des situations les plus risquées")
 
 if len(filtered) > 0:
@@ -228,10 +244,9 @@ if len(filtered) > 0:
         ]]
         .reset_index(drop=True)
     )
-    st.dataframe(top_table, use_container_width=True)
+    st.dataframe(top_table, width="stretch")
 else:
     st.info("Aucune donnée pour ces filtres.")
 
 
-# ---------- Footer ----------
 st.caption(f"Données: {len(filtered)} lignes affichées sur {len(df)} au total.")
